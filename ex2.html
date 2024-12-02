@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stretching Game</title>
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f0f0f0;
+      }
+      #game-container {
+        position: relative;
+        width: 600px;
+        height: 600px;
+        background-color: #000;
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      #webcam-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* 카메라가 컨테이너에 맞게 조정 */
+      }
+      #bubble-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 2;
+        pointer-events: none;
+      }
+      .bubble {
+        position: absolute;
+        width: 80px;
+        height: 80px;
+        background-color: rgba(255, 165, 0, 0.7);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: bold;
+        color: white;
+      }
+      #score-container {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        font-size: 18px;
+        font-weight: bold;
+        color: white;
+        z-index: 3;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container">
+      <div id="webcam-container"></div>
+      <div id="bubble-container"></div>
+      <div id="score-container">Score: 0</div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+      const URL = 'https://teachablemachine.withgoogle.com/models/EEk15z9A_/';
+      let model, webcam, maxPredictions;
+      let score = 0;
+      let currentDirection = '';
+      let correctTime = 0;
+      const directions = ['left-up', 'left-down', 'right-up', 'right-down'];
+      const bubbleContainer = document.getElementById('bubble-container');
+
+      async function init() {
+        const modelURL = URL + 'model.json';
+        const metadataURL = URL + 'metadata.json';
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        // 웹캠 크기 조정 (게임 컨테이너 크기에 맞춤)
+        webcam = new tmImage.Webcam(600, 600, true);
+        await webcam.setup();
+        await webcam.play();
+
+        // 웹캠 캔버스를 웹캠 컨테이너에 추가
+        const webcamCanvas = webcam.canvas;
+        webcamCanvas.style.width = '100%';
+        webcamCanvas.style.height = '100%';
+        document.getElementById('webcam-container').appendChild(webcamCanvas);
+
+        window.requestAnimationFrame(loop);
+        generateNewDirection();
+      }
+
+      function generateNewDirection() {
+        currentDirection =
+          directions[Math.floor(Math.random() * directions.length)];
+        createBubble(currentDirection);
+      }
+
+      function createBubble(direction) {
+        bubbleContainer.innerHTML = ''; // 이전 비눗방울 삭제
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.textContent = direction.toUpperCase().replace('-', ' ');
+
+        // 방향에 따른 비눗방울 위치 설정
+        switch (direction) {
+          case 'left-up':
+            bubble.style.top = '10%';
+            bubble.style.left = '10%';
+            break;
+          case 'left-down':
+            bubble.style.bottom = '10%';
+            bubble.style.left = '10%';
+            break;
+          case 'right-up':
+            bubble.style.top = '10%';
+            bubble.style.right = '10%';
+            break;
+          case 'right-down':
+            bubble.style.bottom = '10%';
+            bubble.style.right = '10%';
+            break;
+        }
+        bubbleContainer.appendChild(bubble);
+      }
+
+      async function loop() {
+        webcam.update();
+        await predict();
+        window.requestAnimationFrame(loop);
+      }
+
+      async function predict() {
+        const prediction = await model.predict(webcam.canvas);
+        const detected = prediction.find(
+          (p) => p.className === currentDirection
+        );
+        const confidence = detected ? detected.probability : 0;
+
+        if (confidence >= 0.5) {
+          correctTime += 1;
+          if (correctTime >= 30) {
+            // 30 프레임 ≈ 1초
+            score++;
+            document.getElementById(
+              'score-container'
+            ).innerText = `Score: ${score}`;
+            correctTime = 0;
+            generateNewDirection();
+          }
+        } else {
+          correctTime = 0;
+        }
+      }
+
+      init();
+    </script>
+  </body>
+</html>
